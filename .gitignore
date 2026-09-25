@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+*.tmp
+*.bak
+*.before_*
+
+condor.*.out
+condor.*.err
+condor.*.log
+*.log
+
+.DS_Store
+
+# Large files: keep commented if you plan to track them directly.
+# *.root
+# *.pkl
+# data/experimental/reconstructed_points/
+# data/experimental/morgan_events/
