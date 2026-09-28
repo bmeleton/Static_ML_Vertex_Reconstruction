@@ -13,8 +13,10 @@ condor.*.log
 
 .DS_Store
 
-# Large files: keep commented if you plan to track them directly.
-# *.root
-# *.pkl
-# data/experimental/reconstructed_points/
-# data/experimental/morgan_events/
+# Large uncompressed publication data
+simulated_data/simulated_collected_features/train_70/static_candidate_features_combined_train70_generic.csv
+simulated_data/simulated_collected_features/test_30/static_candidate_features_combined_test30_generic.csv
+simulated_data/models_generated_from_simulated_features/static_candidate_quality_model.pkl
+
+# Regenerable large analysis output
+simulated_data/simulated_data_analysis/test30_model_application/static_candidate_scored_all.csv

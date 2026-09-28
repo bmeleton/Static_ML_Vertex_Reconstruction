@@ -1,0 +1,718 @@
+RUNNING THE ANALYSIS
+====================
+
+This file describes how to reproduce the experimental-data and simulated
+held-out-data analyses distributed with this repository.
+
+All commands below are intended to be run from the top-level repository
+directory:
+
+    Static_ML_Vertex_Reconstruction/
+
+For example:
+
+    cd /data/grgroup/gr02/bmeleton/Static_ML_Vertex_Reconstruction
+
+
+----------------------------------------------------------------------
+1. IMPORTANT NOTES ABOUT THE DISTRIBUTED DATA
+----------------------------------------------------------------------
+
+This repository does not contain every raw file used during the original
+analysis. Large upstream files have been omitted where a smaller derived
+data product is sufficient to reproduce the publication analysis.
+
+The repository is intended to reproduce:
+
+  1. Experimental static-ML candidate generation from the distributed
+     experimental Hough-line outputs.
+
+  2. Application of the trained four-dataset static-ML vertex model to
+     the experimental candidates.
+
+  3. Experimental center-of-mass reconstruction using the distributed
+     reconstructed point clouds and alpha-energy table.
+
+  4. Comparison of the static-ML and Hough vertices with the common SRIM
+     stopping curve.
+
+  5. Application of the trained static-ML model to the independent
+     simulated 30% held-out sample.
+
+  6. The simulated ML-versus-oracle performance summary.
+
+  7. The four-dataset 4 x 3 dx/dy/dz residual figure.
+
+
+The following large upstream data are NOT included.
+
+
+A. Original experimental detector data
+------------------------------------------------------
+
+The original experimental data detector files used to reconstruct the
+outgoing alpha-particle kinetic energy are not distributed with this
+repository.
+
+These files are large and are not required for the downstream analysis
+because the derived alpha-energy table is included:
+
+    experimental_data/experimental_data_analysis/
+        alpha_energy_reconstructed/alpha_kinetic_energy.csv
+
+The script
+
+    scripts/reconstruct_alpha_kinetic_energy_py36_offsets_static_vertices.py
+
+is retained for transparency and for users who have access to the
+original files. However, the original point clouds and hough lines for all the 
+experimental data used ARE included here.
+
+B. Original simulated ROOT truth files
+---------------------------------------
+
+The original TeBATSim ROOT files are not distributed because of their
+size.
+
+The ROOT files were required when the simulated Hough-line candidates
+were first converted into truth-labeled static candidate feature tables.
+In particular, the simulation truth vertex is required to construct
+quantities such as:
+
+    dist_candidate_minus_truth
+    dx_candidate_minus_truth
+    dy_candidate_minus_truth
+    dz_candidate_minus_truth
+
+These truth quantities are required for training and for the held-out
+oracle/residual analysis.
+
+The truth-labeled 70% training and 30% held-out feature tables are
+therefore distributed directly:
+
+    simulated_data/simulated_collected_features/train_70/
+        static_candidate_features_combined_train70_generic.csv
+
+    simulated_data/simulated_collected_features/test_30/
+        static_candidate_features_combined_test30_generic.csv
+
+Because the simulated ROOT truth files are not included, the public
+no-ROOT simulation workflow begins from these feature tables rather
+than from the original simulated Hough-line files.
+
+
+C. Original simulated Hough-line and point-cloud collections
+-------------------------------------------------------------
+
+The full simulated Hough-line and reconstructed point-cloud collections
+are also not required for the distributed held-out validation workflow
+and are not included in this repository.
+
+The retained truth-labeled feature tables contain the candidate
+information needed to train, apply, and validate the static-ML model.
+
+The experimental point clouds ARE included because they are required by
+the center-of-mass reconstruction to refit the beam, alpha, and recoil
+track directions. Additionally, the number of experimental data events 
+is significantly smaller than the number of simulated events used for 
+training.
+
+
+----------------------------------------------------------------------
+2. INCLUDED 3D HOUGH TRANSFORM SOURCE
+----------------------------------------------------------------------
+
+The source code used for the 3D Hough-transform line reconstruction is
+included under:
+
+    3d_hough_transform/
+
+This directory contains the Hough-transform source, Makefile, and BSD
+license.
+
+The analysis workflows below begin from previously generated Hough-line
+outputs, so recompiling and rerunning the Hough transform is not required
+for reproducing the distributed ML analysis.
+
+The Hough source is included for software provenance and reproducibility.
+
+======================================================================
+PART I: SOFTWARE DEPENDENCIES
+======================================================================
+
+The Python analysis scripts require a scientific Python environment with
+packages including:
+
+    numpy
+    pandas
+    matplotlib
+    scikit-learn
+    joblib
+
+The distributed trained model was produced using the software
+environment used for the original analysis. For the most reliable model
+loading and numerical reproduction, use a compatible scikit-learn
+environment.
+
+The analysis scripts used during development were designed to remain
+compatible with Python 3.6 where possible.
+
+
+======================================================================
+PART II: EXPERIMENTAL DATA ANALYSIS
+======================================================================
+
+The experimental workflow is:
+
+    experimental Hough lines
+            |
+            v
+    static candidate feature generation
+            |
+            v
+    trained four-dataset ML model
+            |
+            v
+    selected ML vertices
+            |
+            v
+    supplied alpha-energy reconstruction
+            +
+    reconstructed point clouds
+            |
+            v
+    center-of-mass reconstruction
+            |
+            v
+    ML versus Hough SRIM comparison
+
+
+----------------------------------------------------------------------
+3. GENERATE EXPERIMENTAL STATIC CANDIDATE FEATURES
+----------------------------------------------------------------------
+
+Input Hough lines:
+
+    experimental_data/experimental_data_hough_lines/
+
+Run:
+
+    python3 scripts/collect_static_candidate_features.py \
+      --linesdir experimental_data/experimental_data_hough_lines \
+      --outdir experimental_data/experimental_collected_features \
+      --candidate-line-source bmeleton_merged \
+      --max-pairs-for-refit 0 \
+      --verbose
+
+Important output:
+
+    experimental_data/experimental_collected_features/
+        static_candidate_features.csv
+
+Additional diagnostic/candidate files are also written to this
+directory.
+
+The option
+
+    --candidate-line-source bmeleton_merged
+
+uses the BMeleton/Cloud_classes merged-line candidate construction. Raw
+Hough line fragments are processed with the line-merging and
+intersection procedure before candidate vertices and static features are
+constructed.
+
+The required supporting Python modules are included under:
+
+    scripts/generate_vertex_candidates_from_hough.py
+    scripts/Cloud_classes.py
+
+
+----------------------------------------------------------------------
+4. APPLY THE FOUR-DATASET STATIC-ML MODEL TO EXPERIMENTAL DATA
+----------------------------------------------------------------------
+
+The trained model distributed with this repository is:
+
+    simulated_data/models_generated_from_simulated_features/
+        static_candidate_quality_model.pkl
+
+Run:
+
+    python3 scripts/apply_static_candidate_model.py \
+      --model simulated_data/models_generated_from_simulated_features/static_candidate_quality_model.pkl \
+      --features experimental_data/experimental_collected_features/static_candidate_features.csv \
+      --outdir experimental_data/experimental_data_analysis/experimental_ml_apply \
+      --write-selected-vertices
+
+Important outputs include:
+
+    experimental_data/experimental_data_analysis/experimental_ml_apply/
+        static_candidate_scored_all.csv
+        static_candidate_selected_by_model.csv
+        static_candidate_selected_by_generator_score.csv
+        static_candidate_selection_summary.csv
+        selected_vertices/
+
+The directory
+
+    selected_vertices/
+
+contains the ML-selected vertex used for each experimental event.
+
+
+----------------------------------------------------------------------
+5. EXPERIMENTAL ALPHA-PARTICLE ENERGY
+----------------------------------------------------------------------
+
+The derived alpha-energy table used by the center-of-mass analysis is:
+
+    experimental_data/experimental_data_analysis/
+        alpha_energy_reconstructed/alpha_kinetic_energy.csv
+
+This file was reconstructed from the original Morgan-format detector
+data using the ML-selected vertex, silicon calibration, detector
+geometry, and alpha stopping-power information.
+
+The original Morgan-format files are not included in this repository,
+so this upstream reconstruction is not part of the standard public
+pipeline.
+
+The supplied alpha-energy table is used directly in the next step.
+
+
+----------------------------------------------------------------------
+6. RECONSTRUCT EXPERIMENTAL CENTER-OF-MASS QUANTITIES
+----------------------------------------------------------------------
+
+Run:
+
+    python3 scripts/alpha_cm_reconstruction_static_vertices.py \
+      --points-dir experimental_data/experimental_data_point_clouds \
+      --vertices experimental_data/experimental_data_analysis/experimental_ml_apply/selected_vertices \
+      --alpha-energy-csv experimental_data/experimental_data_analysis/alpha_energy_reconstructed/alpha_kinetic_energy.csv \
+      --detector-map experimental_data/experimental_data_analysis/silicon_channel_positions_forward.csv \
+      --elastic-mapping experimental_data/experimental_data_analysis/elastic_mapping.csv \
+      --hough-lines-dir experimental_data/experimental_data_hough_lines \
+      --output-dir experimental_data/experimental_data_analysis/alpha_cm_reconstructured \
+      --exclude-radius-mm 5 \
+      --beam-alpha-min 180 \
+      --entrance-z-mm -80 \
+      --detector-y-offset 0 \
+      --detector-z-offset 0 \
+      --annotate-events \
+      --verbose
+
+The reconstructed point clouds are required because the selected vertex
+alone does not provide the track directions.
+
+The script uses the point cloud to reconstruct the beam, outgoing-alpha,
+and recoil directions and then determines the beam-alpha laboratory
+angle and beam path.
+
+Important outputs are:
+
+    experimental_data/experimental_data_analysis/alpha_cm_reconstructured/
+        alpha_cm_reconstruction.csv
+        alpha_cm_hough_reconstruction.csv
+        alpha_cm_skipped.csv
+        alpha_cm_hough_skipped.csv
+        alpha_cm_energy_vs_beam_path.png
+        alpha_cm_hough_vs_beam_path.png
+        alpha_lab_angle_vs_beam_path.png
+
+The file
+
+    alpha_cm_reconstruction.csv
+
+contains the reconstruction using the static-ML vertex.
+
+The file
+
+    alpha_cm_hough_reconstruction.csv
+
+contains the corresponding reconstruction using the Hough vertex.
+
+
+----------------------------------------------------------------------
+7. COMPARE EXPERIMENTAL ML AND HOUGH RESULTS TO THE COMMON SRIM CURVE
+----------------------------------------------------------------------
+
+Run:
+
+    python3 scripts/compare_two_datasets_same_srim_fit.py \
+      experimental_data/experimental_data_analysis/SRIM_O14_in_96He_4CO2_580Torr.txt \
+      --data1 experimental_data/experimental_data_analysis/alpha_cm_reconstructured/alpha_cm_reconstruction.csv \
+      --data2 experimental_data/experimental_data_analysis/alpha_cm_reconstructured/alpha_cm_hough_reconstruction.csv \
+      --density 1.78e-4 \
+      --ecm-min 1 \
+      --ecm-max 10 \
+      --label1 "4-dataset static ML vertex" \
+      --label2 "Hough vertex" \
+      --clip-sigma 0 \
+      --metrics-use-all \
+      --output-prefix experimental_data/experimental_data_analysis/SRIM_comparison_output
+
+Important outputs include:
+
+    experimental_data/experimental_data_analysis/
+        SRIM_comparison_output.png
+        SRIM_comparison_output.pdf
+        SRIM_comparison_output_results.txt
+        SRIM_comparison_output_common_curve.csv
+        SRIM_comparison_output_dataset1_events.csv
+        SRIM_comparison_output_dataset2_events.csv
+
+The results text file contains the fitted common SRIM-curve parameters
+and the residual metrics for the ML and Hough vertex reconstructions.
+
+
+======================================================================
+PART II: SIMULATED HELD-OUT DATA ANALYSIS
+======================================================================
+
+The no-ROOT simulation validation workflow is:
+
+    supplied truth-labeled 70% feature table
+            |
+            | optional model retraining
+            v
+    supplied/frozen trained model
+            |
+            v
+    supplied truth-labeled held-out 30% feature table
+            |
+            v
+    model application
+            |
+            +--------------------------+
+            |                          |
+            v                          v
+    oracle-miss summary        per-dataset selected CSVs
+                                       |
+                                       v
+                              4 x 3 residual figure
+
+
+----------------------------------------------------------------------
+8. OPTIONAL: RETRAIN THE MODEL FROM THE DISTRIBUTED 70% TRAINING SET
+----------------------------------------------------------------------
+
+This step is optional.
+
+For reproducing the published validation, the frozen model distributed
+under
+
+    simulated_data/models_generated_from_simulated_features/
+        static_candidate_quality_model.pkl
+
+can be used directly.
+
+To demonstrate that the model can be trained from the supplied training
+features without overwriting the frozen model, run:
+
+    rm -rf simulated_data/models_generated_from_simulated_features/retrained_check
+
+    python3 scripts/train_static_candidate_model.py \
+      --features simulated_data/simulated_collected_features/train_70/static_candidate_features_combined_train70_generic.csv \
+      --outdir simulated_data/models_generated_from_simulated_features/retrained_check \
+      --model-kind extratrees \
+      --n-estimators 500 \
+      --min-samples-leaf 2 \
+      --random-state 123 \
+      --n-jobs 4 \
+      --val-frac 0 \
+      --test-frac 0 \
+      --target-max-mm 50
+
+The explicit
+
+    --val-frac 0
+    --test-frac 0
+
+options are important because the input file is already the fixed
+external 70% training sample. No additional internal validation/test
+split should be created during this reproduction step.
+
+Outputs are written under:
+
+    simulated_data/models_generated_from_simulated_features/retrained_check/
+
+including:
+
+    static_candidate_quality_model.pkl
+    static_candidate_training_scored_rows.csv
+    static_candidate_training_summary.csv
+    static_candidate_feature_importances.csv
+
+
+----------------------------------------------------------------------
+9. APPLY THE DISTRIBUTED MODEL TO THE HELD-OUT 30% SAMPLE
+----------------------------------------------------------------------
+
+For the publication validation, use the frozen distributed model:
+
+    rm -rf simulated_data/simulated_data_analysis/test30_model_application
+
+    python3 scripts/apply_static_candidate_model.py \
+      --model simulated_data/models_generated_from_simulated_features/static_candidate_quality_model.pkl \
+      --features simulated_data/simulated_collected_features/test_30/static_candidate_features_combined_test30_generic.csv \
+      --outdir simulated_data/simulated_data_analysis/test30_model_application \
+      --write-selected-vertices
+
+Important outputs:
+
+    simulated_data/simulated_data_analysis/test30_model_application/
+        static_candidate_scored_all.csv
+        static_candidate_selected_by_model.csv
+        static_candidate_selected_by_generator_score.csv
+        static_candidate_selection_summary.csv
+        selected_vertices/
+
+A correct application to the distributed held-out sample should contain:
+
+    40,922 scored candidate rows
+    10,560 unique events
+    10,560 ML-selected candidate rows
+
+
+----------------------------------------------------------------------
+10. GENERATE THE HELD-OUT ML-VERSUS-ORACLE SUMMARY
+----------------------------------------------------------------------
+
+Remove any previous oracle-summary directory:
+
+    rm -rf simulated_data/simulated_data_analysis/oracle_miss_summary
+
+Then run:
+
+    python3 scripts/summarize_static_candidate_oracle_misses.py \
+      --scored simulated_data/simulated_data_analysis/test30_model_application/static_candidate_scored_all.csv \
+      --outdir simulated_data/simulated_data_analysis/oracle_miss_summary \
+      --split all \
+      --tolerances-mm 0,0.05,0.1,0.25,0.5,1,2,5 \
+      --top-n 50 \
+      --make-plots \
+      --regret-xmax 2.0 \
+      --regret-bin-width 0.05 \
+      --rank-collapse-after 4 \
+      --rank-regret-xmax 2.0 \
+      --rank-regret-bin-width 0.25
+
+Important outputs include:
+
+    simulated_data/simulated_data_analysis/oracle_miss_summary/
+        ml_vs_oracle_summary.csv
+        worst_ml_oracle_misses_top50.csv
+        regret_histogram.png
+        ml_selected_true_rank_histogram.png
+
+Inspect the numerical summary using:
+
+    cat simulated_data/simulated_data_analysis/oracle_miss_summary/ml_vs_oracle_summary.csv
+
+
+Expected validation fingerprint
+-------------------------------
+
+The distributed four-dataset held-out sample should reproduce
+approximately:
+
+    candidate rows                         40,922
+    events                                10,560
+
+    exact oracle candidate                64.801 %
+    oracle rank <= 2                      87.500 %
+    oracle rank <= 3                      97.102 %
+
+    within 0.25 mm of oracle              83.059 %
+    within 0.50 mm of oracle              90.426 %
+    within 1.00 mm of oracle              95.180 %
+    within 2.00 mm of oracle              97.661 %
+
+    median regret                          0.000 mm
+    95th-percentile regret                 0.955 mm
+
+    oracle median true distance            0.577 mm
+    ML median true distance                0.677 mm
+
+Small numerical differences may occur if the software environment,
+library versions, or model file differ from those distributed with this
+repository.
+
+
+----------------------------------------------------------------------
+11. SPLIT THE ML-SELECTED HELD-OUT EVENTS BACK INTO FOUR DATASETS
+----------------------------------------------------------------------
+
+The combined "generic" feature table intentionally does not contain a
+dataset-label feature. Dataset bookkeeping information was removed so
+that the ML model could not learn simulation-dataset identity as a
+shortcut.
+
+The combined event IDs retain separated event-number blocks, which can
+be used after model application to recover the four dataset groups.
+
+Run:
+
+    python3 - <<'PY'
+    import os
+    import numpy as np
+    import pandas as pd
+
+    inp = (
+        "simulated_data/simulated_data_analysis/"
+        "test30_model_application/"
+        "static_candidate_selected_by_model.csv"
+    )
+
+    outdir = "simulated_data/simulated_data_analysis"
+
+    names = [
+        "alpha_300",
+        "alpha_400",
+        "alpha_580",
+        "proton_500",
+    ]
+
+    d = pd.read_csv(inp)
+
+    events = np.array(sorted(d["event"].astype(int).unique()))
+
+    if len(events) == 0:
+        raise RuntimeError("No events found.")
+
+    gaps = np.diff(events)
+
+    if len(gaps) < 3:
+        raise RuntimeError(
+            "Not enough events to identify four datasets."
+        )
+
+    cut_indices = np.argsort(gaps)[-3:]
+    cut_indices = sorted(cut_indices)
+
+    blocks = np.split(
+        events,
+        [i + 1 for i in cut_indices]
+    )
+
+    if len(blocks) != 4:
+        raise RuntimeError(
+            "Expected four event-ID blocks, got %d" % len(blocks)
+        )
+
+    print("")
+    print("Detected dataset blocks:")
+
+    for name, block in zip(names, blocks):
+        event_set = set(int(x) for x in block)
+
+        sub = d[
+            d["event"].astype(int).isin(event_set)
+        ].copy()
+
+        outfile = os.path.join(
+            outdir,
+            name + "_selected.csv"
+        )
+
+        sub.to_csv(outfile, index=False)
+
+        print(
+            "%-12s events=%5d rows=%5d range=%d..%d -> %s"
+            % (
+                name,
+                len(event_set),
+                len(sub),
+                int(block.min()),
+                int(block.max()),
+                outfile,
+            )
+        )
+    PY
+
+This generates:
+
+    simulated_data/simulated_data_analysis/
+        alpha_300_selected.csv
+        alpha_400_selected.csv
+        alpha_580_selected.csv
+        proton_500_selected.csv
+
+Each file should contain 2,640 selected events.
+
+Check:
+
+    python3 - <<'PY'
+    import pandas as pd
+
+    files = [
+        "simulated_data/simulated_data_analysis/alpha_300_selected.csv",
+        "simulated_data/simulated_data_analysis/alpha_400_selected.csv",
+        "simulated_data/simulated_data_analysis/alpha_580_selected.csv",
+        "simulated_data/simulated_data_analysis/proton_500_selected.csv",
+    ]
+
+    for f in files:
+        d = pd.read_csv(f)
+        print(
+            f,
+            "rows =", len(d),
+            "events =", d["event"].nunique()
+        )
+    PY
+
+Expected:
+
+    alpha_300_selected.csv     2640 events
+    alpha_400_selected.csv     2640 events
+    alpha_580_selected.csv     2640 events
+    proton_500_selected.csv    2640 events
+
+
+----------------------------------------------------------------------
+13. GENERATE THE 4 x 3 SIMULATED RESIDUAL FIGURE
+----------------------------------------------------------------------
+
+The rows of the figure correspond to:
+
+    14O(alpha,alpha)14O, 300 Torr
+    14O(alpha,alpha)14O, 400 Torr
+    14O(alpha,alpha)14O, 580 Torr
+    14O(p,p)14O, 500 Torr
+
+The columns correspond to:
+
+    dx = x_found - x_truth
+    dy = y_found - y_truth
+    dz = z_found - z_truth
+
+
+Remove the previous plot directory if desired:
+
+    rm -rf simulated_data/simulated_data_analysis/residual_plots
+
+    mkdir -p simulated_data/simulated_data_analysis/residual_plots
+
+Then run:
+
+    python3 scripts/plot_static_ml_residuals_4x3_by_dataset.py \
+      --input '14O(alpha,alpha) 300 Torr:simulated_data/simulated_data_analysis/alpha_300_selected.csv' \
+      --input '14O(alpha,alpha) 400 Torr:simulated_data/simulated_data_analysis/alpha_400_selected.csv' \
+      --input '14O(alpha,alpha) 580 Torr:simulated_data/simulated_data_analysis/alpha_580_selected.csv' \
+      --input '14O(p,p) 500 Torr:simulated_data/simulated_data_analysis/proton_500_selected.csv' \
+      --outdir simulated_data/simulated_data_analysis/residual_plots \
+      --outfile static_ml_residuals_4x3_by_dataset.png \
+      --title "Static ML Vertex Residuals by Dataset" \
+      --binwidth 0.075 \
+      --range-mm 5 \
+      --far-param-mm 100 \
+      --dpi 220
+
+Outputs:
+
+    simulated_data/simulated_data_analysis/residual_plots/
+        static_ml_residuals_4x3_by_dataset.png
+        static_ml_residuals_4x3_by_dataset_gaussian_summary.csv
+
+
